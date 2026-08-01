@@ -1,0 +1,27 @@
+# fly.toml file for deploying the SMS Integrator backend on Fly.io
+#
+# To deploy:
+# 1. Install flyctl: https://fly.io/docs/hands-on/install-cli/
+# 2. Run 'fly launch' inside the 'backend' directory
+# 3. When asked to import settings, say Yes.
+# 4. (Optional but recommended) Run 'fly volumes create sms_integrator_data --size 1' to create a persistent disk.
+#    Then uncomment the [mounts] section below before deploying.
+
+app = "sms-integrator-backend"
+primary_region = "ams"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[http_service]
+  internal_port = 5000
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
+
+# Uncomment this section if you want to use a persistent volume to save your database
+# [[mounts]]
+#   source = "sms_gateway_data"
+#   destination = "/data"

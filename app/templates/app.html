@@ -1,0 +1,2265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SMS Integrator - User Console</title>
+    <!-- Tailwind CSS (locally built, no external CDN dependency) -->
+    <link rel="stylesheet" href="/static/css/tailwind.css">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#1d4ed8">
+    <!-- No external Google Fonts CDN: that dependency caused the same class of bug as the old
+         Tailwind Play CDN issue — on a slow/blocked connection the fonts fail to load and headings
+         silently fall back to a different-looking system font, so titles look inconsistent with the
+         rest of the page. Using a native OS font stack renders identically, instantly, every time. -->
+    <!-- Leaflet Map CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <style>
+        :root {
+            --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+            --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+        }
+        body { font-family: var(--font-sans); }
+        .code-font { font-family: var(--font-mono); }
+        h1, h2, h3, h4 { font-family: var(--font-sans); }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; }
+        ::-webkit-scrollbar-thumb:hover { background: #1e3a8a; }
+        [data-view-panel] { animation: fadein .15s ease-out; }
+        @keyframes fadein { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+        .custom-div-icon { background: transparent !important; border: none !important; }
+    </style>
+</head>
+<body class="min-h-screen bg-slate-50 font-sans text-slate-800 antialiased">
+
+<!-- ==================== AUTH OVERLAY ==================== -->
+<div id="screen-login" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/90 backdrop-blur-md hidden">
+    <div class="w-full max-w-md bg-white border border-slate-200 p-8 rounded-2xl shadow-2xl relative overflow-hidden">
+        <div class="absolute top-0 left-0 w-full h-1.5 bg-blue-700"></div>
+        <div class="text-center mb-6">
+            <div class="w-16 h-16 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-700 mx-auto mb-4 shadow-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </div>
+            <h1 class="text-2xl font-semibold text-slate-900 tracking-tight">Welcome Back</h1>
+            <p class="text-xs text-slate-500 mt-1.5 leading-relaxed">Sign in with your gateway credentials to continue.</p>
+        </div>
+        <form id="form-login" class="space-y-4">
+            <div>
+                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Username</label>
+                <input type="text" id="login-username" required placeholder="e.g. rahul"
+                    class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 focus:outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-700/10 transition placeholder:text-slate-400">
+            </div>
+            <div>
+                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Password</label>
+                <input type="password" id="login-password" required placeholder="••••••••"
+                    class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 focus:outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-700/10 transition placeholder:text-slate-400">
+            </div>
+            <button type="submit" class="w-full bg-blue-700 hover:bg-blue-800 text-white py-3.5 rounded-xl font-bold text-sm tracking-wide transition shadow-lg shadow-blue-700/15 active:scale-[0.99]">
+                Sign In
+            </button>
+        </form>
+        <p id="login-error" class="text-rose-600 font-semibold text-xs text-center mt-4 min-h-[1rem] empty:hidden bg-rose-50 border border-rose-100 rounded-lg py-2 px-3"></p>
+    </div>
+</div>
+
+<!-- ==================== MAIN LAYOUT ==================== -->
+<div id="screen-dashboard" class="hidden">
+<div class="flex flex-col md:flex-row min-h-screen">
+
+    <!-- Sidebar -->
+    <aside class="w-full md:w-72 bg-white border-b md:border-b-0 md:border-r border-slate-200 flex flex-col shrink-0 md:h-screen md:sticky md:top-0">
+
+        <div class="p-6 border-b border-slate-100 flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-blue-700 flex items-center justify-center text-white shadow-md shadow-blue-700/10 shrink-0">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </div>
+            <div class="min-w-0">
+                <h1 class="font-semibold text-sm tracking-tight text-slate-900 uppercase leading-none truncate">SMS Integrator</h1>
+                <span class="text-[9px] font-semibold text-blue-700 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded uppercase mt-1 inline-block tracking-wide">User Console</span>
+            </div>
+        </div>
+
+        <div class="px-6 py-3.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between text-xs gap-2">
+            <div class="flex items-center gap-2 min-w-0">
+                <svg class="w-3.5 h-3.5 text-blue-700 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.94.725l.548 2.2a1 1 0 00.096.837l-1.32 2.54a1 1 0 00-.097.838l.548 2.2a1 1 0 01.096.837M17 11a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                <span id="integrator-sim-label" class="font-semibold text-slate-700 text-[11px] truncate">Loading...</span>
+            </div>
+            <span id="user-display-name" class="text-[10px] text-blue-700 font-extrabold tracking-widest uppercase px-1.5 py-0.5 rounded bg-blue-50 border border-blue-100 shrink-0">...</span>
+        </div>
+
+        <nav class="flex-1 p-4 space-y-1.5 overflow-y-auto">
+            <button type="button" id="tab-btn-chat" data-tab-btn="chat" class="tab-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-all duration-150 hover:bg-slate-50 bg-blue-50 text-blue-700 border border-blue-100 shadow-sm">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+                <span>Conversations</span>
+            </button>
+            <button type="button" id="tab-btn-logs" data-tab-btn="logs" class="tab-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-all duration-150 hover:bg-slate-50 hover:text-slate-700 text-slate-500">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+                <span>Message Logs</span>
+            </button>
+            <button type="button" id="tab-btn-links" data-tab-btn="links" class="tab-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-all duration-150 hover:bg-slate-50 hover:text-slate-700 text-slate-500">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+                <span>Extracted Links</span>
+            </button>
+            <button type="button" id="tab-btn-schedules" data-tab-btn="schedules" class="tab-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-all duration-150 hover:bg-slate-50 hover:text-slate-700 text-slate-500">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                <span>Scheduled Searches</span>
+            </button>
+            <button type="button" id="tab-btn-locations" data-tab-btn="locations" class="tab-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-all duration-150 hover:bg-slate-50 hover:text-slate-700 text-slate-500">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                <span>Locations</span>
+            </button>
+        </nav>
+
+        <div class="p-4 border-t border-slate-100 space-y-2">
+            <button id="btn-export-csv" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] py-2.5 rounded-lg transition flex items-center justify-center gap-1.5 shadow-sm shadow-emerald-600/10" style="background-color: #059669 !important; color: #ffffff !important;">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="stroke: #ffffff !important;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                Export Excel
+            </button>
+            <button id="btn-logout" class="w-full bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-600 border border-slate-200 font-bold text-[11px] py-2.5 rounded-lg transition text-center">
+                Logout
+            </button>
+        </div>
+    </aside>
+
+    <!-- Content -->
+    <main class="flex-1 min-w-0 p-6 md:p-10 space-y-8">
+
+        <header class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-200">
+            <div>
+                <div class="flex items-center gap-2 text-xs text-slate-400 font-bold uppercase tracking-wider">
+                    <span>User Console</span><span>/</span>
+                    <span id="header-crumb" class="text-blue-700 font-semibold">Conversations</span>
+                </div>
+                <h1 id="header-title" class="text-2xl md:text-3xl font-semibold text-slate-950 tracking-tight mt-1.5">Conversations</h1>
+            </div>
+        </header>
+
+        <!-- ============ CHAT VIEW PANEL ============ -->
+        <div id="view-chat" data-view-panel="chat" class="block space-y-8">
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+                <!-- Left: Conversations List -->
+                <section class="lg:col-span-1 bg-white border border-slate-200/80 rounded-xl shadow-sm flex flex-col h-[640px] overflow-hidden">
+                    <div class="p-5 border-b border-slate-100 flex items-center justify-between">
+                        <div>
+                            <h2 class="text-xs font-bold text-blue-700 uppercase tracking-wide">Conversations</h2>
+                            <p class="text-[11px] text-slate-400 mt-1">Active SMS threads</p>
+                        </div>
+                        <button id="btn-new-conversation" class="bg-blue-700 hover:bg-blue-800 text-white w-8 h-8 rounded-lg flex items-center justify-center shadow-sm transition active:scale-95 shrink-0">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path></svg>
+                        </button>
+                    </div>
+                    <div id="conversations-list" class="flex-1 overflow-y-auto p-2 space-y-1">
+                        <!-- Dynamic conversation rows -->
+                    </div>
+                </section>
+
+                <!-- Right: Thread / New Conversation / Empty state -->
+                <section class="lg:col-span-2 bg-white border border-slate-200/80 rounded-xl shadow-sm flex flex-col h-[640px] overflow-hidden">
+
+                    <!-- Empty state -->
+                    <div id="panel-empty" class="flex-1 flex flex-col items-center justify-center text-slate-400">
+                        <div class="w-12 h-12 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center mb-3 text-blue-700">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+                        </div>
+                        <span class="text-sm font-semibold text-slate-800">Select a conversation</span>
+                        <span class="text-xs text-slate-500 mt-1">or start a new one with the + button</span>
+                    </div>
+
+                    <!-- Thread view -->
+                    <div id="panel-thread" class="flex-1 flex-col overflow-hidden hidden">
+                        <div class="border-b border-slate-100 p-4 flex items-center justify-between">
+                            <div class="flex items-center gap-3 min-w-0">
+                                <div class="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 text-blue-700 flex items-center justify-center shrink-0">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                                </div>
+                                <div class="min-w-0">
+                                    <div id="thread-contact-company" class="text-sm font-extrabold text-slate-800 truncate">—</div>
+                                    <div id="thread-contact-number" class="text-[11px] text-slate-500 font-medium code-font truncate">—</div>
+                                </div>
+                            </div>
+                            <button id="btn-show-history-map" class="hidden bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/60 text-xs font-bold px-3 py-1.5 rounded-lg transition active:scale-95 flex items-center gap-1.5 shadow-sm whitespace-nowrap shrink-0">
+                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                                Location History (0)
+                            </button>
+                        </div>
+                        <div id="thread-messages" class="flex-1 overflow-y-auto p-5 space-y-3.5 flex flex-col">
+                            <!-- Dynamic bubbles -->
+                        </div>
+                        <form id="form-send-thread" class="p-3.5 bg-white border-t border-slate-100 flex gap-2 items-center">
+                            <select id="thread-sim-operator" class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-3 text-slate-800 text-sm focus:outline-none focus:border-blue-700 transition" title="Select Sender Operator">
+                                <!-- Populated dynamically -->
+                            </select>
+                            <textarea id="thread-text" rows="1" required class="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-blue-700 transition resize-none placeholder:text-slate-400" placeholder="Type a message..."></textarea>
+                            <button type="submit" class="h-[46px] w-[46px] flex items-center justify-center bg-blue-700 hover:bg-blue-800 text-white rounded-xl shadow-sm active:scale-95 transition shrink-0">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- New conversation form -->
+                    <div id="panel-new-conversation" class="flex-1 flex-col overflow-hidden hidden">
+                        <div class="border-b border-slate-100 p-4 flex items-center gap-3">
+                            <button id="btn-new-conversation-back" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-600 transition shrink-0">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"></path></svg>
+                            </button>
+                            <div class="text-sm font-bold text-slate-800">New Conversation</div>
+                        </div>
+                        <form id="form-new-conversation" class="p-6 space-y-4 max-w-md overflow-y-auto">
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Recipient Telecom Company</label>
+                                <select id="new-conv-to" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-blue-700 transition">
+                                    <option value="" disabled selected>Select Telecom Company...</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Message</label>
+                                <textarea id="new-conv-text" rows="4" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-blue-700 transition resize-none placeholder:text-slate-400" placeholder="Type your message..."></textarea>
+                            </div>
+
+                            <!-- Search mode: one-time vs recurring over a date range -->
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Search Mode</label>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <button type="button" id="mode-btn-onetime" class="search-mode-btn px-3 py-2.5 rounded-xl text-xs font-bold border transition bg-blue-700 text-white border-blue-700">
+                                        One Time Search
+                                    </button>
+                                    <button type="button" id="mode-btn-scheduled" class="search-mode-btn px-3 py-2.5 rounded-xl text-xs font-bold border transition bg-slate-50 text-slate-600 border-slate-200">
+                                        Date Range / Periodic
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div id="schedule-options" class="hidden space-y-3 bg-slate-50 border border-slate-200 rounded-xl p-4">
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">From (Start)</label>
+                                        <input type="datetime-local" id="schedule-start" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-slate-900 text-xs focus:outline-none focus:border-blue-700 transition">
+                                    </div>
+                                    <div>
+                                        <label class="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">To (End)</label>
+                                        <input type="datetime-local" id="schedule-end" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-slate-900 text-xs focus:outline-none focus:border-blue-700 transition">
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Repeat Every</label>
+                                    <select id="schedule-frequency" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-slate-900 text-xs focus:outline-none focus:border-blue-700 transition">
+                                        <option value="5">5 minutes</option>
+                                        <option value="15">15 minutes</option>
+                                        <option value="45">45 minutes</option>
+                                        <option value="60" selected>60 minutes</option>
+                                        <option value="120">2 hours</option>
+                                        <option value="240">4 hours</option>
+                                        <option value="480">8 hours</option>
+                                        <option value="720">12 hours</option>
+                                        <option value="1440">24 hours</option>
+                                    </select>
+                                </div>
+                                <p class="text-[11px] text-slate-500 leading-snug">The same message above will be re-sent automatically to this number on this schedule until the end date/time.</p>
+                            </div>
+
+                            <button type="submit" id="btn-new-conv-submit" class="w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-3.5 rounded-xl text-sm transition shadow-sm active:scale-[0.98]">
+                                Send Message
+                            </button>
+                        </form>
+                    </div>
+
+                </section>
+
+            </div>
+        </div>
+
+        <!-- ============ MESSAGE LOGS PANEL ============ -->
+        <div id="view-logs" data-view-panel="logs" class="hidden">
+            <div class="bg-white border border-slate-200/80 rounded-xl shadow-sm p-6 flex flex-col min-h-[580px]">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-5 border-b border-slate-100 gap-4 mb-6">
+                    <div>
+                        <h2 class="text-sm font-bold text-slate-900">Message Logs</h2>
+                        <p class="text-xs text-slate-400 mt-0.5">Real-time incoming and outgoing messages with operators, status, and replies.</p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <!-- Search Bar -->
+                        <div class="relative min-w-[200px] sm:min-w-[250px]">
+                            <span class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                                <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                            </span>
+                            <input type="text" id="logs-search" class="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-4 py-2 text-xs text-slate-900 focus:outline-none focus:border-blue-700 transition placeholder:text-slate-400" placeholder="Search number, message text, operator...">
+                        </div>
+                        <button id="btn-export-user-logs" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3.5 py-2 rounded-lg transition shrink-0 active:scale-95 flex items-center gap-1.5 shadow-sm shadow-emerald-600/10 whitespace-nowrap" style="background-color: #059669 !important; color: #ffffff !important;">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="stroke: #ffffff !important;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                            Export Excel
+                        </button>
+                        <button id="btn-refresh-user-logs" class="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200/60 text-xs font-bold px-3.5 py-2 rounded-lg transition shrink-0 active:scale-95 flex items-center gap-1.5">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 4.79M9 9h9l-4-4"></path></svg>
+                            Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Messages Log Table Container -->
+                <div class="flex-1 overflow-x-auto overflow-y-auto max-h-[500px] pr-1">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                            <tr class="border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-left">
+                                <th class="pb-3.5 text-[10px]">Direction</th>
+                                <th class="pb-3.5 text-[10px]">Sender</th>
+                                <th class="pb-3.5 text-[10px]">Recipient</th>
+                                <th class="pb-3.5 text-[10px]">Message Text</th>
+                                <th class="pb-3.5 text-[10px]">Time</th>
+                                <th class="pb-3.5 text-[10px]">Telecom / SIM Operator</th>
+                                <th class="pb-3.5 text-[10px]">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="user-logs-tbody" class="divide-y divide-slate-100 font-medium text-slate-700">
+                            <!-- Dynamic rows -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============ EXTRACTED LINKS PANEL ============ -->
+        <div id="view-links" data-view-panel="links" class="hidden">
+            <div class="bg-white border border-slate-200/80 rounded-xl shadow-sm p-6 flex flex-col min-h-[580px]">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-5 border-b border-slate-100 gap-4 mb-6">
+                    <div>
+                        <h2 class="text-sm font-bold text-slate-900">Extracted Links</h2>
+                        <p class="text-xs text-slate-400 mt-0.5">List of all links extracted from message logs.</p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <!-- Search Bar -->
+                        <div class="relative min-w-[200px] sm:min-w-[250px]">
+                            <span class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                                <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                            </span>
+                            <input type="text" id="links-search" class="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-4 py-2 text-xs text-slate-900 focus:outline-none focus:border-blue-700 transition placeholder:text-slate-400" placeholder="Search sender, link, operator...">
+                        </div>
+                        <button id="btn-export-links" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3.5 py-2 rounded-lg transition shrink-0 active:scale-95 flex items-center gap-1.5 shadow-sm shadow-emerald-600/10 whitespace-nowrap" style="background-color: #059669 !important; color: #ffffff !important;">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="stroke: #ffffff !important;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                            Export Excel
+                        </button>
+                        <button id="btn-refresh-links" class="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200/60 text-xs font-bold px-3.5 py-2 rounded-lg transition shrink-0 active:scale-95 flex items-center gap-1.5">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 4.79M9 9h9l-4-4"></path></svg>
+                            Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Links Table Container -->
+                <div class="flex-1 overflow-x-auto overflow-y-auto max-h-[500px] pr-1">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                            <tr class="border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-left">
+                                <th class="pb-3.5 text-[10px]">Direction</th>
+                                <th class="pb-3.5 text-[10px]">Sender</th>
+                                <th class="pb-3.5 text-[10px]">Recipient</th>
+                                <th class="pb-3.5 text-[10px]">Extracted Link</th>
+                                <th class="pb-3.5 text-[10px]">Original Message Text</th>
+                                <th class="pb-3.5 text-[10px]">Time</th>
+                                <th class="pb-3.5 text-[10px]">Telecom / SIM Operator</th>
+                            </tr>
+                        </thead>
+                        <tbody id="links-tbody" class="divide-y divide-slate-100 font-medium text-slate-700">
+                            <!-- Dynamic rows -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+         </div>
+
+        <!-- ============ SCHEDULED SEARCHES PANEL ============ -->
+        <div id="view-schedules" data-view-panel="schedules" class="hidden">
+            <div class="bg-white border border-slate-200/80 rounded-xl shadow-sm p-6 flex flex-col min-h-[580px]">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-5 border-b border-slate-100 gap-4 mb-6">
+                    <div>
+                        <h2 class="text-sm font-bold text-slate-900">Scheduled Searches</h2>
+                        <p class="text-xs text-slate-400 mt-0.5">Recurring or date-range message searches you've set up.</p>
+                    </div>
+                    <button id="btn-refresh-schedules" class="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200/60 text-xs font-bold px-3.5 py-2 rounded-lg transition shrink-0 active:scale-95 flex items-center gap-1.5">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 4.79M9 9h9l-4-4"></path></svg>
+                        Refresh
+                    </button>
+                </div>
+                <div id="schedules-list" class="space-y-2 text-sm text-slate-600">
+                    <span class="text-xs text-slate-400">No scheduled searches yet.</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============ ALL LOCATIONS PANEL ============ -->
+        <div id="view-locations" data-view-panel="locations" class="hidden">
+            <div class="bg-white border border-slate-200/80 rounded-xl shadow-sm p-6 flex flex-col min-h-[580px]">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-5 border-b border-slate-100 gap-4 mb-6">
+                    <div>
+                        <h2 class="text-sm font-bold text-slate-900">All Locations</h2>
+                        <p class="text-xs text-slate-400 mt-0.5">Every location extracted from your messages, plotted on one map.</p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <select id="locations-filter" class="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 font-semibold focus:outline-none focus:border-blue-700 transition min-w-[180px]">
+                            <option value="">All Numbers</option>
+                        </select>
+                        <button id="btn-refresh-locations" class="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200/60 text-xs font-bold px-3.5 py-2 rounded-lg transition shrink-0 active:scale-95 flex items-center gap-1.5">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 4.79M9 9h9l-4-4"></path></svg>
+                            Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <div class="flex-1 flex flex-col md:flex-row gap-4 min-h-[520px]">
+                    <!-- Map -->
+                    <div class="w-full md:flex-1 h-[350px] md:h-auto relative bg-slate-100 border border-slate-200 rounded-xl overflow-hidden">
+                        <div id="locations-map" class="absolute inset-0 z-10"></div>
+                    </div>
+                    <!-- List -->
+                    <div class="w-full md:w-80 flex flex-col min-h-0 bg-white border border-slate-200 rounded-xl overflow-hidden shrink-0">
+                        <div class="p-4 border-b border-slate-100 bg-slate-50/30 flex items-center justify-between">
+                            <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider">Points</h4>
+                            <span id="locations-count" class="bg-blue-100 text-blue-800 font-extrabold text-[10px] px-2 py-0.5 rounded-full">0</span>
+                        </div>
+                        <div id="locations-list" class="flex-1 overflow-y-auto divide-y divide-slate-100 p-2 space-y-1 max-h-[520px]">
+                            <span class="text-xs text-slate-400 px-2">No locations found yet.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+</div>
+</div>
+
+    <!-- Location History Modal -->
+    <div id="modal-location-history" class="fixed inset-0 z-50 flex items-center justify-center p-4 hidden" style="background-color: rgba(15, 23, 42, 0.7);">
+        <div class="w-full max-w-5xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col h-[640px] max-h-[90vh]">
+            <!-- Header -->
+            <div class="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                <div>
+                    <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                        <svg class="w-4 h-4 text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                        Location History Map (<span id="history-modal-phone" class="code-font text-blue-700">—</span>)
+                    </h3>
+                    <p class="text-[11px] text-slate-400 mt-1">Viewing all extracted locations plotted in chronological sequence of movement</p>
+                </div>
+                <button id="btn-close-location-modal" class="text-slate-400 hover:text-slate-600 transition p-1.5 rounded-lg hover:bg-slate-100">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <!-- Body -->
+            <div class="flex-1 flex flex-col md:flex-row min-h-0">
+                <!-- Map Left Pane -->
+                <div class="w-full md:flex-1 h-[350px] md:h-full relative bg-slate-100 border-r border-slate-100">
+                    <div id="history-map" class="absolute inset-0 z-10"></div>
+                </div>
+                <!-- Location List Right Pane -->
+                <div class="w-full md:w-80 flex flex-col min-h-0 bg-white">
+                    <div class="p-4 border-b border-slate-100 bg-slate-50/30 flex items-center justify-between">
+                        <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider">Historical Points</h4>
+                        <span id="history-modal-count" class="bg-blue-100 text-blue-800 font-extrabold text-[10px] px-2 py-0.5 rounded-full">0</span>
+                    </div>
+                    <div id="history-locations-list" class="flex-1 overflow-y-auto divide-y divide-slate-100 p-2 space-y-1">
+                        <!-- Location elements will be populated here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script Application Logic -->
+    <script>
+        const AUTH_TOKEN_KEY = "smsgateway_user_token";
+        const USERNAME_KEY = "smsgateway_username";
+        const DISPLAY_NAME_KEY = "smsgateway_user_name";
+        const SIM_LABEL_KEY = "smsgateway_sim_num";
+
+        const screenLogin = document.getElementById("screen-login");
+        const screenDashboard = document.getElementById("screen-dashboard");
+
+        const tabBtnChat = document.getElementById("tab-btn-chat");
+        const tabBtnLogs = document.getElementById("tab-btn-logs");
+        const tabBtnLinks = document.getElementById("tab-btn-links");
+        const tabBtnSchedules = document.getElementById("tab-btn-schedules");
+        const tabBtnLocations = document.getElementById("tab-btn-locations");
+        const viewChat = document.getElementById("view-chat");
+        const viewLogs = document.getElementById("view-logs");
+        const viewLinks = document.getElementById("view-links");
+        const viewSchedules = document.getElementById("view-schedules");
+        const viewLocations = document.getElementById("view-locations");
+
+        const formLogin = document.getElementById("form-login");
+        const formSendThread = document.getElementById("form-send-thread");
+        const formNewConversation = document.getElementById("form-new-conversation");
+        const conversationsList = document.getElementById("conversations-list");
+        const threadMessages = document.getElementById("thread-messages");
+
+        const panelEmpty = document.getElementById("panel-empty");
+        const panelThread = document.getElementById("panel-thread");
+        const panelNewConversation = document.getElementById("panel-new-conversation");
+
+        let allMessages = [];
+        let activeContact = null;
+        let allowedNumbers = [];
+
+        async function loadAllowedNumbers() {
+            const token = sessionStorage.getItem(AUTH_TOKEN_KEY);
+            if (!token) return;
+
+            try {
+                const r = await fetch("/api/numbers", {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                if (r.ok) {
+                    const res = await r.json();
+                    allowedNumbers = res.numbers || [];
+                    
+                    const selectThread = document.getElementById("thread-sim-operator");
+                    const selectNew = document.getElementById("new-conv-sim-operator");
+                    
+                    [selectThread, selectNew].forEach(sel => {
+                        if (!sel) return;
+                        sel.innerHTML = "";
+                        allowedNumbers.forEach(n => {
+                            const opt = document.createElement("option");
+                            opt.value = n.operator_name;
+                            opt.textContent = n.operator_name;
+                            sel.appendChild(opt);
+                        });
+                        
+                        if (allowedNumbers.length > 0) {
+                            const optAll = document.createElement("option");
+                            optAll.value = "ALL_OPERATORS";
+                            optAll.textContent = "All Numbers (Send via All)";
+                            sel.appendChild(optAll);
+                        }
+                        
+                        if (allowedNumbers.length === 0) {
+                            const opt = document.createElement("option");
+                            opt.value = "";
+                            opt.textContent = "Default SIM";
+                            sel.appendChild(opt);
+                        }
+                    });
+
+                    // Populate recipient select
+                    const selectRecipient = document.getElementById("new-conv-to");
+                    if (selectRecipient) {
+                        selectRecipient.innerHTML = "";
+                        const defaultOpt = document.createElement("option");
+                        defaultOpt.value = "";
+                        defaultOpt.disabled = true;
+                        defaultOpt.selected = true;
+                        defaultOpt.textContent = "Select Telecom Company...";
+                        selectRecipient.appendChild(defaultOpt);
+
+                        // Lets the user fire the same query at every registered
+                        // company number in one submit, instead of repeating the
+                        // form once per company.
+                        if (allowedNumbers.length > 1) {
+                            const optAllCompanies = document.createElement("option");
+                            optAllCompanies.value = "ALL_COMPANIES";
+                            optAllCompanies.textContent = "\u26A1 All Companies (Send to Every Number)";
+                            selectRecipient.appendChild(optAllCompanies);
+                        }
+
+                        allowedNumbers.forEach(n => {
+                            const opt = document.createElement("option");
+                            opt.value = n.phone_number;
+                            opt.textContent = `${n.operator_name} (${n.phone_number})`;
+                            selectRecipient.appendChild(opt);
+                        });
+
+                        if (allowedNumbers.length === 0) {
+                            const opt = document.createElement("option");
+                            opt.value = "";
+                            opt.textContent = "No pre-defined numbers available";
+                            selectRecipient.appendChild(opt);
+                        }
+                    }
+
+                    renderConversations();
+                    if (activeContact) {
+                        updateThreadOperatorDropdown(activeContact);
+                        const companyName = getCompanyName(activeContact);
+                        const companyNumber = companyName ? getCompanyNumber(companyName) : null;
+                        document.getElementById("thread-contact-company").textContent = companyName || activeContact;
+                        document.getElementById("thread-contact-number").textContent = companyName ? (companyNumber || "SMS conversation") : "SMS conversation";
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to load allowed numbers", err);
+            }
+        }
+
+        function showPanel(panel) {
+            [panelEmpty, panelThread, panelNewConversation].forEach(p => {
+                p.classList.add("hidden");
+                p.classList.remove("flex");
+            });
+            panel.classList.remove("hidden");
+            panel.classList.add("flex");
+        }
+
+        // Initialization check
+        function checkAuth() {
+            const token = sessionStorage.getItem(AUTH_TOKEN_KEY);
+            if (!token) {
+                screenLogin.classList.remove("hidden");
+                screenDashboard.classList.add("hidden");
+            } else {
+                screenLogin.classList.add("hidden");
+                screenDashboard.classList.remove("hidden");
+                document.getElementById("user-display-name").textContent = "@" + (sessionStorage.getItem(USERNAME_KEY) || "user");
+                document.getElementById("integrator-sim-label").textContent = sessionStorage.getItem(SIM_LABEL_KEY) || "Active Node";
+                showPanel(panelEmpty);
+                loadMessages();
+                loadAllowedNumbers();
+                loadSchedules();
+            }
+        }
+
+        // Login Submit
+        formLogin.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const username = document.getElementById("login-username").value.trim();
+            const password = document.getElementById("login-password").value.trim();
+            const errDiv = document.getElementById("login-error");
+            errDiv.textContent = "";
+
+            try {
+                const r = await fetch("/api/login", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ username, password })
+                });
+                const res = await r.json();
+
+                if (!r.ok) {
+                    errDiv.textContent = res.error || "Login failed. Check your credentials.";
+                    return;
+                }
+
+                sessionStorage.setItem(AUTH_TOKEN_KEY, res.token);
+                sessionStorage.setItem(USERNAME_KEY, res.username);
+                sessionStorage.setItem(DISPLAY_NAME_KEY, res.name);
+                sessionStorage.setItem(SIM_LABEL_KEY, res.my_number);
+
+                checkAuth();
+            } catch (err) {
+                errDiv.textContent = "Server unreachable. Check your connection.";
+            }
+        });
+
+        // Logout
+        document.getElementById("btn-logout").addEventListener("click", () => {
+            sessionStorage.clear();
+            activeContact = null;
+            checkAuth();
+        });
+
+        // Export CSV
+        async function runExport(btn) {
+            const token = sessionStorage.getItem(AUTH_TOKEN_KEY);
+            if (!token) return;
+
+            btn.disabled = true;
+            btn.classList.add("opacity-50");
+            const originalText = btn.innerHTML;
+            btn.innerHTML = "Exporting...";
+
+            try {
+                const response = await fetch("/api/export", {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                if (!response.ok) {
+                    alert("Failed to export data");
+                    return;
+                }
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.style.display = "none";
+                a.href = url;
+                a.download = `sms_export_${sessionStorage.getItem(USERNAME_KEY) || 'user'}.csv`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+            } catch (err) {
+                console.error("Export failed", err);
+                alert("Error exporting data");
+            } finally {
+                btn.disabled = false;
+                btn.classList.remove("opacity-50");
+                btn.innerHTML = originalText;
+            }
+        }
+
+        const btnExportCsv = document.getElementById("btn-export-csv");
+        if (btnExportCsv) {
+            btnExportCsv.addEventListener("click", () => runExport(btnExportCsv));
+        }
+
+        const btnExportUserLogs = document.getElementById("btn-export-user-logs");
+        if (btnExportUserLogs) {
+            btnExportUserLogs.addEventListener("click", () => runExport(btnExportUserLogs));
+        }
+
+        // Converts a naive <input type="datetime-local"> value (interpreted
+        // by the browser as wall-clock time in the VIEWER's own timezone)
+        // into a "YYYY-MM-DD HH:MM:SS" string in UTC, ready for the backend,
+        // which stores/compares everything in UTC.
+        function localDatetimeToUtcString(localValue) {
+            // `new Date("2026-07-20T15:02")` (no trailing Z) is parsed by the
+            // browser as local time - exactly what we want here.
+            const d = new Date(localValue);
+            const pad = (n) => String(n).padStart(2, "0");
+            return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ` +
+                   `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
+        }
+
+        // --- Date / time formatting -------------------------------------
+        function parseServerTime(str) {
+            if (!str) return null;
+            const [datePart, timePart] = str.split(" ");
+            const [y, mo, d] = datePart.split("-").map(Number);
+            const [h, mi, s] = (timePart || "00:00:00").split(":").map(Number);
+            // Server always sends timestamps in UTC (see backend). Date.UTC()
+            // tags them as UTC so toLocaleTimeString/toLocaleDateString below
+            // automatically render them in the viewer's own local timezone.
+            return new Date(Date.UTC(y, mo - 1, d, h, mi, s || 0));
+        }
+
+        function formatClock(date) {
+            return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+        }
+
+        function formatListTimestamp(str) {
+            const date = parseServerTime(str);
+            if (!date) return "";
+            const now = new Date();
+            const isToday = date.toDateString() === now.toDateString();
+            const yesterday = new Date(now);
+            yesterday.setDate(now.getDate() - 1);
+            const isYesterday = date.toDateString() === yesterday.toDateString();
+
+            if (isToday) return formatClock(date);
+            if (isYesterday) return "Yesterday";
+            return date.toLocaleDateString([], { day: "numeric", month: "short" });
+        }
+
+        function formatBubbleTimestamp(str) {
+            const date = parseServerTime(str);
+            if (!date) return "";
+            const now = new Date();
+            const isToday = date.toDateString() === now.toDateString();
+            const dayLabel = isToday
+                ? "Today"
+                : date.toLocaleDateString([], { day: "numeric", month: "short" });
+            return `${dayLabel}, ${formatClock(date)}`;
+        }
+
+        // --- Load + group messages into conversations --------------------
+        async function loadMessages() {
+            const token = sessionStorage.getItem(AUTH_TOKEN_KEY);
+            if (!token) return;
+
+            try {
+                const r = await fetch("/api/inbox", {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                if (r.status === 401) {
+                    sessionStorage.clear();
+                    checkAuth();
+                    return;
+                }
+                const data = await r.json();
+                allMessages = data.messages || [];
+                renderConversations();
+                if (activeContact) renderThread(activeContact);
+                if (!viewLogs.classList.contains("hidden")) {
+                    renderUserLogsTable(document.getElementById("logs-search").value.trim());
+                }
+            } catch (e) {
+                console.error("Failed to load message history:", e);
+            }
+        }
+
+        function normalizePhone(phone) {
+            if (!phone) return "";
+            const digits = phone.replace(/[^0-9]/g, "");
+            if (digits.length === 0) return phone.trim();
+            return digits.length >= 10 ? digits.slice(-10) : digits;
+        }
+
+        // A conversation/location-history "identity" for a message. Prefers
+        // target_number (the customer/account number embedded in the message
+        // text itself, e.g. "BAL 9876543210") over the raw recipient/sender.
+        // This matters because a telecom operator can legitimately reply from
+        // a different one of their own gateway numbers every time - but they
+        // always echo back the same target_number, so grouping on it keeps
+        // every reply about the same tracked number in one place instead of
+        // splitting into a separate conversation per reply.
+        function contactIdentityFor(m) {
+            if (m.target_number) return m.target_number;
+            return m.direction === "out" ? m.recipient : m.sender;
+        }
+
+        function isPhoneMatch(p1, p2) {
+            if (!p1 || !p2) return false;
+            const n1 = p1.replace(/[^0-9]/g, "");
+            const n2 = p2.replace(/[^0-9]/g, "");
+            if (n1 === n2) return true;
+            
+            // Check if one is a suffix of another (min 4 digits)
+            const len = Math.min(n1.length, n2.length);
+            if (len >= 4) {
+                return n1.slice(-len) === n2.slice(-len);
+            }
+            return false;
+        }
+
+        function extractCoordinates(text) {
+            if (!text) return null;
+
+            // Priority 1: message already contains explicit "Lat ... Long ..." coordinates
+            // (either typed directly, or already resolved & appended by the backend).
+            // These are the real, trustworthy coordinates - use them as-is.
+            const latRegex = /Lat\s*[:\-]?\s*([+-]?\d+\.\d+)/i;
+            const longRegex = /(?:Long|Lng|Lon)\s*[:\-]?\s*([+-]?\d+\.\d+)/i;
+
+            const latMatch = latRegex.exec(text);
+            const longMatch = longRegex.exec(text);
+
+            if (latMatch && longMatch) {
+                return {
+                    lat: parseFloat(latMatch[1]),
+                    lng: parseFloat(longMatch[1])
+                };
+            }
+
+            // Priority 2: some operator replies embed raw coordinates straight in the URL
+            // itself (e.g. "maps?g=28.69491,77.14769") - this is still a REAL coordinate,
+            // not a guess, so it's safe to use directly.
+            const urlRegex = /maps\?\s*g=([+-]?\d+\.\d+),([+-]?\d+\.\d+)/i;
+            const urlMatch = urlRegex.exec(text);
+            if (urlMatch) {
+                return {
+                    lat: parseFloat(urlMatch[1]),
+                    lng: parseFloat(urlMatch[2])
+                };
+            }
+
+            // If there's a Google Maps link but no coordinates yet, we deliberately do NOT
+            // invent a fake/placeholder location anymore - the backend resolves the link
+            // to the real coordinates in the background and the UI will pick them up on
+            // its next poll (see hasUnresolvedMapLink / mapHtml "resolving" state below).
+            return null;
+        }
+
+        function hasUnresolvedMapLink(text) {
+            if (!text) return false;
+            if (extractCoordinates(text)) return false;
+            return /https?:\/\/(?:maps\.app\.goo\.gl|goo\.gl\/maps|maps\.google\.[a-z]{2,3})\/[^\s]+/i.test(text);
+        }
+
+        function extractLinks(text) {
+            if (!text) return [];
+            // Regex to find standard HTTP/HTTPS links
+            const linkRegex = /(https?:\/\/[^\s]+)/gi;
+            return text.match(linkRegex) || [];
+        }
+
+        function formatOperatorReply(text) {
+            if (!text) return text;
+            // Check if it's an operator reply containing key metadata (case-insensitive check)
+            const upper = text.toUpperCase();
+            if (!upper.includes("CGI") && !upper.includes("VLR") && !upper.includes("IMSI") && !upper.includes("IME") && !upper.includes("MOB") && !upper.includes("LAT") && !upper.includes("LONG")) {
+                return text;
+            }
+            
+            let formatted = text;
+            
+            // First, clean up multiple spaces
+            formatted = formatted.replace(/\s+/g, " ");
+            
+            // Define the keywords we want to put on a new line
+            const keywords = [
+                "MOB", "L\\.\\s*Act\\.", "CGI", "VLR", "IME", "IMSI", 
+                "Lat", "Long", "https?://maps\\.google\\.com/maps\\S*", "LBS\\s*Type", "Request\\s*ID", "Request"
+            ];
+            
+            // Extract any leading standalone number (e.g. 8437106666 at the start) and put a newline after it
+            formatted = formatted.replace(/^(\d{8,15})\s+/, "$1\n");
+            
+            // For each keyword, if it's preceded by a space, replace that space with a newline
+            keywords.forEach(kw => {
+                const regex = new RegExp(`\\s+(${kw})`, "gi");
+                formatted = formatted.replace(regex, "\n$1");
+            });
+            
+            return formatted;
+        }
+
+        function extractFirstPhone(text) {
+            if (!text) return null;
+            // 1. Prioritize MOB prefix matching to prevent collision with other metadata like IMEI, VLR, IMSI, Request ID
+            const mobRegex = /MOB\s*[:\-]?\s*(\d{4,15})/i;
+            const mobMatch = mobRegex.exec(text);
+            if (mobMatch && mobMatch[1]) {
+                return normalizePhone(mobMatch[1]);
+            }
+            
+            // 2. Standard number extraction
+            const regex = /(?:\+?91[\s-]?|0)?(\d{4,15})/g;
+            let match;
+            while ((match = regex.exec(text)) !== null) {
+                const norm = normalizePhone(match[1]);
+                if (norm && norm.length >= 4) {
+                    return norm;
+                }
+            }
+            return null;
+        }
+
+        function groupByContact(messages) {
+            const groups = {};
+            messages.forEach(m => {
+                const rawContact = contactIdentityFor(m);
+                const contactKey = normalizePhone(rawContact);
+                if (!groups[contactKey]) groups[contactKey] = [];
+                groups[contactKey].push(m);
+            });
+            return Object.entries(groups).map(([contactKey, msgs]) => {
+                const lastMessage = msgs[0];
+                const displayName = contactIdentityFor(lastMessage);
+                return {
+                    contact: displayName,
+                    contactKey: contactKey,
+                    lastMessage,
+                    messages: msgs,
+                };
+            }).sort((a, b) => (b.lastMessage.id > a.lastMessage.id ? 1 : -1));
+        }
+
+        function renderConversations() {
+            conversationsList.innerHTML = "";
+            const conversations = groupByContact(allMessages);
+
+            if (conversations.length === 0) {
+                conversationsList.innerHTML = `
+                    <div class="flex flex-col items-center justify-center text-slate-500 py-16 px-4 text-center">
+                        <svg class="w-10 h-10 mb-2 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+                        <span class="text-sm">No conversations yet</span>
+                        <span class="text-xs text-slate-600 mt-1">Tap + to send your first message</span>
+                    </div>
+                `;
+                return;
+            }
+
+            conversations.forEach(conv => {
+                const isMine = conv.lastMessage.direction === "out";
+                let statusPrefix = "";
+                if (isMine) {
+                    if (conv.lastMessage.status === "sent") statusPrefix = `<span class="text-emerald-600 font-semibold">Sent · </span>`;
+                    else if (conv.lastMessage.status === "queued") statusPrefix = `<span class="text-amber-600 font-semibold animate-pulse">Sending... · </span>`;
+                    else statusPrefix = `<span class="text-rose-600 font-semibold">Failed · </span>`;
+                } else {
+                    statusPrefix = `<span class="text-blue-700 font-semibold">Reply · </span>`;
+                }
+
+                const isActive = activeContact && (normalizePhone(conv.contact) === normalizePhone(activeContact));
+                const companyName = getCompanyNameFromMessages(conv.messages);
+                const row = document.createElement("div");
+                row.className = `flex items-center gap-3 px-3 py-3 rounded-xl cursor-pointer transition ${isActive ? "bg-blue-50 border border-blue-100" : "hover:bg-slate-50 border border-transparent"}`;
+                row.innerHTML = `
+                    <div class="w-10 h-10 rounded-full bg-slate-100 border border-slate-200/60 flex items-center justify-center text-slate-500 shrink-0">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                    </div>
+                    <div class="min-w-0 flex-1">
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm font-bold text-slate-800 truncate">${escapeHtml(companyName || conv.contact)}</span>
+                            <span class="text-[10px] text-slate-500 font-medium shrink-0 ml-2">${formatListTimestamp(conv.lastMessage.time)}</span>
+                        </div>
+                        <p class="text-xs text-slate-500 truncate mt-0.5">${statusPrefix}${escapeHtml(conv.lastMessage.text)}</p>
+                    </div>
+                `;
+                row.addEventListener("click", () => openThread(conv.contact));
+                conversationsList.appendChild(row);
+            });
+        }
+
+        function escapeHtml(str) {
+            if (str == null) return "";
+            return String(str)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        function makeLinksClickable(text) {
+            if (text == null) return "";
+            const urlRegex = /(https?:\/\/[^\s]+)/gi;
+            return text.replace(urlRegex, function(url) {
+                const rawUrl = url.replace(/&amp;/g, "&");
+                return `<a href="${rawUrl}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 underline font-extrabold" onclick="event.stopPropagation();">${url}</a>`;
+            });
+        }
+
+        // Every message belonging to a given conversation/contact.
+        function getMessagesForContact(contact) {
+            const targetKey = normalizePhone(contact);
+            return allMessages.filter(m => normalizePhone(contactIdentityFor(m)) === targetKey);
+        }
+
+        // Resolve the telecom company name for a conversation from the actual
+        // sim_operator recorded on its messages (the operator picked when the
+        // query was sent) - NOT by matching the displayed contact number
+        // against the gateway numbers list, since the displayed contact is
+        // often the target_number embedded in the message text, not the
+        // company's own gateway number.
+        function getCompanyNameFromMessages(msgs) {
+            const outMsg = msgs.find(m => m.direction === "out" && m.sim_operator && m.sim_operator !== "ALL_OPERATORS");
+            if (outMsg) return outMsg.sim_operator;
+            const anyMsg = msgs.find(m => m.sim_operator && m.sim_operator !== "ALL_OPERATORS");
+            return anyMsg ? anyMsg.sim_operator : null;
+        }
+
+        function getCompanyName(contact) {
+            return getCompanyNameFromMessages(getMessagesForContact(contact));
+        }
+
+        // The company's own registered gateway number for a given operator name.
+        function getCompanyNumber(companyName) {
+            const matched = allowedNumbers.find(n => n.operator_name === companyName);
+            return matched ? matched.phone_number : null;
+        }
+
+        // --- Thread (single conversation) view ---------------------------
+        function updateThreadOperatorDropdown(contact) {
+            const selectThread = document.getElementById("thread-sim-operator");
+            if (!selectThread) return;
+            selectThread.innerHTML = "";
+
+            const companyName = getCompanyName(contact);
+
+            if (companyName) {
+                // This conversation was already sent through a known operator -
+                // keep replies going through that same operator only.
+                const opt = document.createElement("option");
+                opt.value = companyName;
+                opt.textContent = companyName;
+                selectThread.appendChild(opt);
+                return;
+            }
+
+            allowedNumbers.forEach(n => {
+                const opt = document.createElement("option");
+                opt.value = n.operator_name;
+                opt.textContent = n.operator_name;
+                selectThread.appendChild(opt);
+            });
+
+            if (allowedNumbers.length > 0) {
+                const optAll = document.createElement("option");
+                optAll.value = "ALL_OPERATORS";
+                optAll.textContent = "All Numbers (Send via All)";
+                selectThread.appendChild(optAll);
+            }
+
+            if (allowedNumbers.length === 0) {
+                const opt = document.createElement("option");
+                opt.value = "";
+                opt.textContent = "Default SIM";
+                selectThread.appendChild(opt);
+            }
+        }
+
+        function openThread(contact) {
+            activeContact = contact;
+            const companyName = getCompanyName(contact);
+            const companyNumber = companyName ? getCompanyNumber(companyName) : null;
+            document.getElementById("thread-contact-company").textContent = companyName || contact;
+            document.getElementById("thread-contact-number").textContent = companyName ? (companyNumber || "SMS conversation") : "SMS conversation";
+            showPanel(panelThread);
+            updateThreadOperatorDropdown(contact);
+            renderThread(contact);
+            renderConversations(); // refresh highlight state
+        }
+
+        function renderThread(contact) {
+            const targetKey = normalizePhone(contact);
+            const msgs = allMessages
+                .filter(m => {
+                    const msgContact = contactIdentityFor(m);
+                    return normalizePhone(msgContact) === targetKey;
+                })
+                .slice()
+                .reverse();
+
+            // Interleave/group incoming replies under their corresponding outgoing query messages
+            const queryMap = []; // Array of { msg: m, phone: string, replies: [] }
+            const renderedList = []; // final structured list
+
+            msgs.forEach(m => {
+                if (m.direction === "out") {
+                    const phone = extractFirstPhone(m.text);
+                    const qObj = { msg: m, phone: phone, replies: [] };
+                    queryMap.push(qObj);
+                    renderedList.push(qObj);
+                } else {
+                    // Incoming reply
+                    const phone = extractFirstPhone(m.text);
+                    // Find the best matching query (closest preceding query with matching phone number)
+                    let matchedQuery = null;
+                    if (phone) {
+                        for (let i = queryMap.length - 1; i >= 0; i--) {
+                            const q = queryMap[i];
+                            if (q.phone && isPhoneMatch(q.phone, phone)) {
+                                matchedQuery = q;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (matchedQuery) {
+                        matchedQuery.replies.push(m);
+                    } else {
+                        // Unmatched incoming message, render it independently
+                        renderedList.push({ msg: m, phone: phone, replies: [], isUnmatchedReply: true });
+                    }
+                }
+            });
+
+            // Flatten the structured list so replies are placed directly below their matched query
+            const flatMsgs = [];
+            renderedList.forEach(item => {
+                if (item.isUnmatchedReply) {
+                    flatMsgs.push(item.msg);
+                } else {
+                    flatMsgs.push(item.msg);
+                    item.replies.forEach(r => {
+                        flatMsgs.push(r);
+                    });
+                }
+            });
+
+            threadMessages.innerHTML = "";
+            const mapInitializers = [];
+
+            flatMsgs.forEach(m => {
+                const isMine = m.direction === "out";
+                const containerClass = isMine ? "self-end items-end" : "self-start items-start";
+
+                let bubbleColor = "bg-slate-100 border border-slate-200/80 text-slate-800";
+                if (isMine) {
+                    if (m.status === "sent") bubbleColor = "bg-blue-700 text-white shadow-sm";
+                    else if (m.status === "queued") bubbleColor = "bg-slate-200 text-slate-700 animate-pulse border border-slate-300";
+                    else bubbleColor = "bg-rose-50 text-rose-700 border border-rose-100";
+                }
+
+                let statusBadge = "";
+                if (isMine) {
+                    if (m.status === "sent") statusBadge = `<span class="text-emerald-600">✓ Delivered</span>`;
+                    else if (m.status === "queued") statusBadge = `<span class="text-slate-500">⚡ Sending...</span>`;
+                    else statusBadge = `<span class="text-rose-600 font-bold">✕ Failed</span>`;
+                }
+
+                const formattedText = formatOperatorReply(m.text);
+                const coords = extractCoordinates(m.text);
+                let mapHtml = "";
+
+                // If real coordinates were found in incoming reply, generate a map holder div
+                if (coords && !isMine) {
+                    // Create a unique clean ID for the map element
+                    const cleanId = String(m.id || "").replace(/[^a-zA-Z0-9-]/g, "");
+                    const mapDivId = `map-${cleanId}`;
+                    mapHtml = `
+                        <div class="mt-3 w-full rounded-xl overflow-hidden border border-slate-200 shadow-sm" style="height: 190px; min-width: 250px;" onclick="event.stopPropagation();">
+                            <div id="${mapDivId}" class="w-full h-full"></div>
+                        </div>
+                    `;
+                    mapInitializers.push({ divId: mapDivId, coords: coords });
+                } else if (!isMine && hasUnresolvedMapLink(m.text)) {
+                    // There's a maps link but the backend hasn't resolved the real
+                    // coordinates yet - show a clear "resolving" state instead of a
+                    // fake/wrong point. The 7s poll will refresh this automatically
+                    // once the backend finishes resolving the link.
+                    mapHtml = `
+                        <div class="mt-3 w-full rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center gap-2 text-xs text-slate-500 font-medium" style="height: 60px; min-width: 250px;">
+                            <svg class="animate-spin h-3.5 w-3.5 text-slate-400" viewBox="0 0 24 24" fill="none">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                            </svg>
+                            Resolving exact location...
+                        </div>
+                    `;
+                }
+
+                const bubbleHtml = `
+                    <div class="max-w-[75%] flex flex-col ${containerClass}">
+                        <div class="px-3.5 py-2.5 rounded-2xl text-sm font-medium leading-relaxed break-all whitespace-pre-wrap ${bubbleColor}">
+                            ${makeLinksClickable(escapeHtml(formattedText))}
+                            ${mapHtml}
+                        </div>
+                        <div class="flex items-center space-x-1.5 mt-1 text-[10px] text-slate-500 px-1 font-semibold">
+                            <span>${formatBubbleTimestamp(m.time)}</span>
+                            ${statusBadge ? `<span>·</span> ${statusBadge}` : ""}
+                        </div>
+                    </div>
+                `;
+                threadMessages.innerHTML += bubbleHtml;
+            });
+
+            // Initialize all Map containers via Leaflet
+            if (typeof L !== "undefined") {
+                mapInitializers.forEach(item => {
+                    try {
+                        const map = L.map(item.divId, {
+                            zoomControl: false,
+                            attributionControl: false
+                        }).setView([item.coords.lat, item.coords.lng], 14);
+                        
+                        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                            maxZoom: 19
+                        }).addTo(map);
+                        
+                        L.marker([item.coords.lat, item.coords.lng]).addTo(map);
+                        
+                        // Invalidate size to trigger proper rendering and tile fetching
+                        setTimeout(() => {
+                            map.invalidateSize();
+                        }, 100);
+                    } catch (e) {
+                        console.error("Leaflet initialization failed:", e);
+                    }
+                });
+            } else {
+                console.warn("Leaflet library (L) is not defined.");
+            }
+
+            // Update Location History button state based on coordinates count
+            const locCount = flatMsgs.filter(m => extractCoordinates(m.text) != null).length;
+            const btnHistory = document.getElementById("btn-show-history-map");
+            if (btnHistory) {
+                if (locCount > 0) {
+                    btnHistory.classList.remove("hidden");
+                    btnHistory.innerHTML = `
+                        <svg class="w-4 h-4 text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                        Location History (${locCount})
+                    `;
+                } else {
+                    btnHistory.classList.add("hidden");
+                }
+            }
+
+            setTimeout(() => {
+                threadMessages.scrollTop = threadMessages.scrollHeight;
+            }, 50);
+        }
+
+        formSendThread.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            if (!activeContact) return;
+            const textInput = document.getElementById("thread-text");
+            const text = textInput.value.trim();
+            if (!text) return;
+
+            const simSelect = document.getElementById("thread-sim-operator");
+            const simOperator = simSelect ? simSelect.value : "";
+
+            textInput.value = "";
+            await sendMessage(activeContact, text, simOperator);
+        });
+
+        // --- New conversation panel --------------------------------------
+        document.getElementById("btn-new-conversation").addEventListener("click", () => {
+            document.getElementById("new-conv-to").value = "";
+            document.getElementById("new-conv-text").value = "";
+            document.getElementById("schedule-start").value = "";
+            document.getElementById("schedule-end").value = "";
+            setSearchMode("onetime");
+            showPanel(panelNewConversation);
+        });
+
+        document.getElementById("btn-new-conversation-back").addEventListener("click", () => {
+            showPanel(activeContact ? panelThread : panelEmpty);
+        });
+
+        // --- One-time vs Scheduled (date range / periodic) mode toggle ----
+        let searchMode = "onetime";
+        const modeBtnOnetime = document.getElementById("mode-btn-onetime");
+        const modeBtnScheduled = document.getElementById("mode-btn-scheduled");
+        const scheduleOptions = document.getElementById("schedule-options");
+        const btnNewConvSubmit = document.getElementById("btn-new-conv-submit");
+
+        function setSearchMode(mode) {
+            searchMode = mode;
+            const activeCls = ["bg-blue-700", "text-white", "border-blue-700"];
+            const inactiveCls = ["bg-slate-50", "text-slate-600", "border-slate-200"];
+            const onetimeIsActive = mode === "onetime";
+            modeBtnOnetime.classList.remove(...activeCls, ...inactiveCls);
+            modeBtnOnetime.classList.add(...(onetimeIsActive ? activeCls : inactiveCls));
+            modeBtnScheduled.classList.remove(...activeCls, ...inactiveCls);
+            modeBtnScheduled.classList.add(...(onetimeIsActive ? inactiveCls : activeCls));
+
+            scheduleOptions.classList.toggle("hidden", onetimeIsActive);
+            btnNewConvSubmit.textContent = onetimeIsActive ? "Send Message" : "Start Scheduled Search";
+        }
+        modeBtnOnetime.addEventListener("click", () => setSearchMode("onetime"));
+        modeBtnScheduled.addEventListener("click", () => setSearchMode("scheduled"));
+
+        formNewConversation.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const to = document.getElementById("new-conv-to").value.trim();
+            const text = document.getElementById("new-conv-text").value.trim();
+            if (!to || !text) return;
+
+            const isBroadcast = to === "ALL_COMPANIES";
+            // Recipients to actually act on: every registered company number
+            // when broadcasting, or just the one the user picked.
+            const targets = isBroadcast
+                ? allowedNumbers.map(n => ({ to: n.phone_number, simOperator: n.operator_name }))
+                : [{ to, simOperator: (allowedNumbers.find(n => n.phone_number === to) || {}).operator_name || "ALL_OPERATORS" }];
+
+            if (searchMode === "scheduled") {
+                const startAtLocal = document.getElementById("schedule-start").value;
+                const endAtLocal = document.getElementById("schedule-end").value;
+                const frequencyMinutes = document.getElementById("schedule-frequency").value;
+                if (!startAtLocal || !endAtLocal) {
+                    alert("Please pick both a start and end date/time for the scheduled search.");
+                    return;
+                }
+                // <input type="datetime-local"> gives a naive wall-clock string
+                // (e.g. "2026-07-20T15:02") with NO timezone info - it means
+                // 15:02 in the viewer's own local timezone, not UTC. The backend
+                // stores and compares everything in UTC, so we must convert here
+                // before sending, or schedules end up off by the viewer's UTC
+                // offset (wrong displayed time AND firing hours late/early).
+                const startAt = localDatetimeToUtcString(startAtLocal);
+                const endAt = localDatetimeToUtcString(endAtLocal);
+                for (const t of targets) {
+                    await createSchedule(t.to, text, t.simOperator, startAt, endAt, frequencyMinutes);
+                }
+                setSearchMode("onetime");
+                showPanel(activeContact ? panelThread : panelEmpty);
+                return;
+            }
+
+            if (isBroadcast) {
+                // Fire all sends first, reload the message list once at the end
+                // instead of once per company - much snappier for a large list
+                // of registered numbers.
+                await Promise.all(targets.map(t => sendMessage(t.to, text, t.simOperator, true)));
+                await loadMessages();
+                showPanel(activeContact ? panelThread : panelEmpty);
+                return;
+            }
+
+            await sendMessage(to, text, targets[0].simOperator);
+
+            // allMessages is now fresh (sendMessage awaits loadMessages). Find the
+            // message we just sent and open its real conversation identity - this
+            // may differ from the raw "to" number once the target_number embedded
+            // in the text gets extracted, and conversations are grouped by that.
+            const justSent = allMessages.find(m => m.direction === "out" && m.recipient === to && m.text === text);
+            openThread(justSent ? contactIdentityFor(justSent) : to);
+        });
+
+        // --- Scheduled (periodic / date-range) searches --------------------
+        async function createSchedule(to, text, simOperator, startAt, endAt, frequencyMinutes) {
+            const token = sessionStorage.getItem(AUTH_TOKEN_KEY);
+            if (!token) return;
+
+            try {
+                const r = await fetch("/api/schedules", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        to,
+                        text,
+                        sim_operator: simOperator,
+                        start_at: startAt,
+                        end_at: endAt,
+                        frequency_minutes: parseInt(frequencyMinutes, 10)
+                    })
+                });
+                const res = await r.json();
+                if (!r.ok) {
+                    alert(res.error || "Failed to create scheduled search.");
+                    return;
+                }
+                loadSchedules();
+            } catch (err) {
+                alert("Failed to create scheduled search. Check that the server is online.");
+            }
+        }
+
+        function frequencyLabel(minutes) {
+            const map = { 5: "5 min", 15: "15 min", 45: "45 min", 60: "60 min", 120: "2 hr", 240: "4 hr", 480: "8 hr", 720: "12 hr", 1440: "24 hr" };
+            return map[minutes] || `${minutes} min`;
+        }
+
+        async function loadSchedules() {
+            const token = sessionStorage.getItem(AUTH_TOKEN_KEY);
+            const listEl = document.getElementById("schedules-list");
+            if (!token || !listEl) return;
+
+            try {
+                const r = await fetch("/api/schedules", {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                if (!r.ok) return;
+                const res = await r.json();
+                const schedules = res.schedules || [];
+
+                if (schedules.length === 0) {
+                    listEl.innerHTML = `<span class="text-xs text-slate-400">No scheduled searches yet.</span>`;
+                    return;
+                }
+
+                listEl.innerHTML = schedules.map(s => `
+                    <div class="flex items-center justify-between gap-3 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5">
+                        <div class="min-w-0">
+                            <div class="text-xs font-bold text-slate-800 code-font">${escapeHtml(s.recipient)} <span class="text-slate-400 font-normal">· every ${frequencyLabel(s.frequency_minutes)}</span></div>
+                            <div class="text-[11px] text-slate-500 truncate">${escapeHtml(s.text)}</div>
+                            <div class="text-[10px] text-slate-400 mt-0.5">${formatServerTimeShort(s.start_at)} → ${formatServerTimeShort(s.end_at)}</div>
+                        </div>
+                        <div class="flex items-center gap-2 shrink-0">
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase ${scheduleStatusClass(s.status)}">${s.status}</span>
+                            ${s.status === "active" ? `<button onclick="cancelSchedule('${s.id}')" class="text-[11px] font-bold text-rose-600 hover:underline">Cancel</button>` : ""}
+                        </div>
+                    </div>
+                `).join("");
+            } catch (err) {
+                console.error("Failed to load schedules", err);
+            }
+        }
+
+        function scheduleStatusClass(status) {
+            if (status === "active") return "bg-emerald-50 text-emerald-700";
+            if (status === "completed") return "bg-slate-200 text-slate-600";
+            return "bg-rose-50 text-rose-600";
+        }
+
+        function formatServerTimeShort(str) {
+            const date = parseServerTime(str);
+            if (!date) return "—";
+            // Converts the stored UTC timestamp to the viewer's local time,
+            // shown compactly (date + hour:minute), consistent with how
+            // times are displayed everywhere else in the app.
+            return date.toLocaleString([], {
+                day: "numeric", month: "short",
+                hour: "numeric", minute: "2-digit"
+            });
+        }
+
+        async function cancelSchedule(scheduleId) {
+            const token = sessionStorage.getItem(AUTH_TOKEN_KEY);
+            if (!token) return;
+            if (!confirm("Stop this scheduled search?")) return;
+
+            try {
+                const r = await fetch(`/api/schedules/${scheduleId}`, {
+                    method: "DELETE",
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                if (r.ok) loadSchedules();
+            } catch (err) {
+                alert("Failed to cancel scheduled search.");
+            }
+        }
+
+        const btnRefreshSchedules = document.getElementById("btn-refresh-schedules");
+        if (btnRefreshSchedules) {
+            btnRefreshSchedules.addEventListener("click", loadSchedules);
+        }
+
+        async function sendMessage(to, text, simOperator = "", skipReload = false) {
+            const token = sessionStorage.getItem(AUTH_TOKEN_KEY);
+            if (!token) return;
+
+            try {
+                const r = await fetch("/api/send", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ to, text, sim_operator: simOperator })
+                });
+
+                if (r.status === 401) {
+                    sessionStorage.clear();
+                    checkAuth();
+                    return;
+                }
+
+                if (!skipReload) await loadMessages();
+            } catch (err) {
+                alert("Failed to queue message. Check that the server is online.");
+            }
+        }
+
+        // --- Detailed Message Logs + Tab Switcher -------------------------
+        // For outgoing messages, show the telecom company name instead of the raw
+        // recipient number - prefer sim_operator (the operator actually used to
+        // send), falling back to matching the recipient against allowedNumbers.
+        // For incoming messages, the recipient is our own device/number - show
+        // the logged-in username instead of that raw number.
+        function recipientLabel(m) {
+            if (m.direction === "out") {
+                if (m.sim_operator && m.sim_operator !== "ALL_OPERATORS") return m.sim_operator;
+                const matched = allowedNumbers.find(n => n.phone_number === m.recipient);
+                if (matched) return matched.operator_name;
+            } else {
+                const username = sessionStorage.getItem(USERNAME_KEY);
+                if (username) return "@" + username;
+            }
+            return m.recipient;
+        }
+
+        function renderUserLogsTable(filterText = "") {
+            const tbody = document.getElementById("user-logs-tbody");
+            if (!tbody) return;
+            tbody.innerHTML = "";
+
+            const query = filterText.toLowerCase();
+            const filtered = allMessages.filter(m => {
+                if (!query) return true;
+                const sender = (m.sender || "").toLowerCase();
+                const recipient = (m.recipient || "").toLowerCase();
+                const text = (m.text || "").toLowerCase();
+                const operator = (m.sim_operator || "").toLowerCase();
+                return sender.includes(query) || recipient.includes(query) || text.includes(query) || operator.includes(query);
+            });
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="py-12 text-center text-slate-500 font-medium">
+                            No matching messages found.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            filtered.forEach(m => {
+                const isOut = m.direction === 'out';
+                const dirBadge = isOut 
+                    ? `<span class="bg-blue-50 text-blue-700 border border-blue-100 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">Outgoing</span>` 
+                    : `<span class="bg-emerald-50 text-emerald-700 border border-emerald-100 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">Incoming</span>`;
+                
+                let statusBadge = "";
+                if (m.status === 'sent' || m.status === 'received' || m.status === 'delivered') {
+                    statusBadge = `<span class="text-emerald-600 font-bold">● Success</span>`;
+                } else if (m.status === 'queued') {
+                    statusBadge = `<span class="text-amber-600 font-bold animate-pulse">⚡ Sending...</span>`;
+                } else {
+                    statusBadge = `<span class="text-rose-600 font-bold">● Failed</span>`;
+                }
+
+                tbody.innerHTML += `
+                    <tr class="hover:bg-slate-50 transition border-b border-slate-100">
+                        <td class="py-3.5 pr-2">${dirBadge}</td>
+                        <td class="py-3.5 font-bold text-slate-600">${escapeHtml(m.sender)}</td>
+                        <td class="py-3.5 text-slate-800 font-semibold code-font">${escapeHtml(recipientLabel(m))}</td>
+                        <td class="py-3.5 pr-4 text-slate-700 font-medium break-all whitespace-pre-wrap max-w-xs">${makeLinksClickable(escapeHtml(formatOperatorReply(m.text)))}</td>
+                        <td class="py-3.5 text-slate-500 font-medium whitespace-nowrap">${escapeHtml(formatBubbleTimestamp(m.time))}</td>
+                        <td class="py-3.5 text-slate-600 font-bold uppercase tracking-wider">${escapeHtml(m.sim_operator || "Unknown")}</td>
+                        <td class="py-3.5">${statusBadge}</td>
+                    </tr>
+                `;
+            });
+        }
+
+        function renderLinksTable(filterText = "") {
+            const tbody = document.getElementById("links-tbody");
+            if (!tbody) return;
+            tbody.innerHTML = "";
+
+            const query = filterText.toLowerCase();
+            const rows = [];
+            
+            allMessages.forEach(m => {
+                const links = extractLinks(m.text);
+                links.forEach(link => {
+                    const sender = m.sender || "";
+                    const recipient = m.recipient || "";
+                    const operator = m.sim_operator || "";
+                    
+                    if (query) {
+                        const sLower = sender.toLowerCase();
+                        const rLower = recipient.toLowerCase();
+                        const lLower = link.toLowerCase();
+                        const oLower = operator.toLowerCase();
+                        if (!sLower.includes(query) && !rLower.includes(query) && !lLower.includes(query) && !oLower.includes(query)) {
+                            return;
+                        }
+                    }
+                    
+                    rows.push({
+                        message: m,
+                        link: link
+                    });
+                });
+            });
+
+            if (rows.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="py-12 text-center text-slate-500 font-medium">
+                            No matching links found.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            rows.forEach(item => {
+                const m = item.message;
+                const link = item.link;
+                const isOut = m.direction === 'out';
+                const dirBadge = isOut 
+                    ? `<span class="bg-blue-50 text-blue-700 border border-blue-100 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">Outgoing</span>` 
+                    : `<span class="bg-emerald-50 text-emerald-700 border border-emerald-100 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">Incoming</span>`;
+                
+                tbody.innerHTML += `
+                    <tr class="hover:bg-slate-50 transition border-b border-slate-100">
+                        <td class="py-3.5 pr-2">${dirBadge}</td>
+                        <td class="py-3.5 font-bold text-slate-600">${escapeHtml(m.sender)}</td>
+                        <td class="py-3.5 text-slate-800 font-semibold code-font">${escapeHtml(recipientLabel(m))}</td>
+                        <td class="py-3.5 text-blue-600 font-bold underline code-font max-w-xs break-all">
+                            <a href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer" class="hover:text-blue-800">${escapeHtml(link)}</a>
+                        </td>
+                        <td class="py-3.5 pr-4 text-slate-500 font-medium break-all whitespace-pre-wrap max-w-xs text-[10px]">${escapeHtml(m.text)}</td>
+                        <td class="py-3.5 text-slate-500 font-medium whitespace-nowrap">${escapeHtml(formatBubbleTimestamp(m.time))}</td>
+                        <td class="py-3.5 text-slate-600 font-bold uppercase tracking-wider">${escapeHtml(m.sim_operator || "Unknown")}</td>
+                    </tr>
+                `;
+            });
+        }
+
+        async function runLinksExport(btn) {
+            btn.disabled = true;
+            btn.classList.add("opacity-50");
+            const originalText = btn.innerHTML;
+            btn.innerHTML = "Exporting...";
+
+            try {
+                const headers = ["Direction", "Sender", "Recipient", "Extracted Link", "Original Message Text", "Time", "SIM Operator"];
+                const csvRows = [headers.join(",")];
+
+                const query = document.getElementById("links-search").value.trim().toLowerCase();
+                
+                allMessages.forEach(m => {
+                    const links = extractLinks(m.text);
+                    links.forEach(link => {
+                        const sender = m.sender || "";
+                        const recipient = m.recipient || "";
+                        const operator = m.sim_operator || "";
+                        
+                        if (query) {
+                            const sLower = sender.toLowerCase();
+                            const rLower = recipient.toLowerCase();
+                            const lLower = link.toLowerCase();
+                            const oLower = operator.toLowerCase();
+                            if (!sLower.includes(query) && !rLower.includes(query) && !lLower.includes(query) && !oLower.includes(query)) {
+                                return;
+                            }
+                        }
+
+                        const escapeCsv = (str) => {
+                            if (str == null) return '""';
+                            const escaped = String(str).replace(/"/g, '""');
+                            return `"${escaped}"`;
+                        };
+
+                        const directionStr = m.direction === 'out' ? "Outgoing" : "Incoming";
+
+                        const row = [
+                            escapeCsv(directionStr),
+                            escapeCsv(sender),
+                            escapeCsv(recipient),
+                            escapeCsv(link),
+                            escapeCsv(m.text),
+                            escapeCsv(formatBubbleTimestamp(m.time)),
+                            escapeCsv(operator)
+                        ];
+                        csvRows.push(row.join(","));
+                    });
+                });
+
+                const csvContent = "\uFEFF" + csvRows.join("\n");
+                const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.style.display = "none";
+                a.href = url;
+                a.download = `extracted_links_${sessionStorage.getItem(USERNAME_KEY) || 'user'}.csv`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+            } catch (err) {
+                console.error("Export links failed", err);
+                alert("Error exporting links");
+            } finally {
+                btn.disabled = false;
+                btn.classList.remove("opacity-50");
+                btn.innerHTML = originalText;
+            }
+        }
+
+        const tabMeta = {
+            chat: { crumb: "Conversations", title: "Conversations" },
+            logs: { crumb: "Message Logs", title: "Message Logs" },
+            links: { crumb: "Extracted Links", title: "Extracted Links" },
+            schedules: { crumb: "Scheduled Searches", title: "Scheduled Searches" },
+            locations: { crumb: "Locations", title: "All Locations" },
+        };
+
+        function switchTab(tab) {
+            [tabBtnChat, tabBtnLogs, tabBtnLinks, tabBtnSchedules, tabBtnLocations].forEach(btn => {
+                const active = btn.dataset.tabBtn === tab;
+                btn.classList.toggle("bg-blue-50", active);
+                btn.classList.toggle("text-blue-700", active);
+                btn.classList.toggle("border", active);
+                btn.classList.toggle("border-blue-100", active);
+                btn.classList.toggle("shadow-sm", active);
+                btn.classList.toggle("text-slate-500", !active);
+            });
+
+            viewChat.classList.add("hidden");
+            viewLogs.classList.add("hidden");
+            viewLinks.classList.add("hidden");
+            viewSchedules.classList.add("hidden");
+            viewLocations.classList.add("hidden");
+
+            const meta = tabMeta[tab];
+            if (meta) {
+                document.getElementById("header-crumb").textContent = meta.crumb;
+                document.getElementById("header-title").textContent = meta.title;
+            }
+
+            if (tab === "chat") {
+                viewChat.classList.remove("hidden");
+            } else if (tab === "logs") {
+                viewLogs.classList.remove("hidden");
+                renderUserLogsTable(document.getElementById("logs-search").value.trim());
+            } else if (tab === "links") {
+                viewLinks.classList.remove("hidden");
+                renderLinksTable(document.getElementById("links-search").value.trim());
+            } else if (tab === "schedules") {
+                viewSchedules.classList.remove("hidden");
+                loadSchedules();
+            } else if (tab === "locations") {
+                viewLocations.classList.remove("hidden");
+                populateLocationsFilter();
+                renderLocationsTab();
+            }
+        }
+
+        tabBtnChat.addEventListener("click", () => switchTab("chat"));
+        tabBtnLogs.addEventListener("click", () => switchTab("logs"));
+        tabBtnLinks.addEventListener("click", () => switchTab("links"));
+        tabBtnSchedules.addEventListener("click", () => switchTab("schedules"));
+        tabBtnLocations.addEventListener("click", () => switchTab("locations"));
+
+        document.getElementById("logs-search").addEventListener("input", (e) => {
+            renderUserLogsTable(e.target.value.trim());
+        });
+
+        document.getElementById("links-search").addEventListener("input", (e) => {
+            renderLinksTable(e.target.value.trim());
+        });
+
+        document.getElementById("btn-refresh-user-logs").addEventListener("click", async () => {
+            const btn = document.getElementById("btn-refresh-user-logs");
+            btn.disabled = true;
+            btn.classList.add("opacity-50");
+            const orig = btn.innerHTML;
+            btn.innerHTML = "Refreshing...";
+            await loadMessages();
+            renderUserLogsTable(document.getElementById("logs-search").value.trim());
+            btn.disabled = false;
+            btn.classList.remove("opacity-50");
+            btn.innerHTML = orig;
+        });
+
+        document.getElementById("btn-refresh-links").addEventListener("click", async () => {
+            const btn = document.getElementById("btn-refresh-links");
+            btn.disabled = true;
+            btn.classList.add("opacity-50");
+            const orig = btn.innerHTML;
+            btn.innerHTML = "Refreshing...";
+            await loadMessages();
+            renderLinksTable(document.getElementById("links-search").value.trim());
+            btn.disabled = false;
+            btn.classList.remove("opacity-50");
+            btn.innerHTML = orig;
+        });
+
+        const btnExportLinks = document.getElementById("btn-export-links");
+        if (btnExportLinks) {
+            btnExportLinks.addEventListener("click", () => runLinksExport(btnExportLinks));
+        }
+
+        // --- Location History Modal logic ---
+        let historyMap = null;
+        const addressCache = new Map(); // "lat,lng" -> address string (or null if unresolved)
+
+        function addressCacheKey(lat, lng) {
+            return `${lat.toFixed(4)},${lng.toFixed(4)}`;
+        }
+
+        async function fetchAddress(lat, lng) {
+            const key = addressCacheKey(lat, lng);
+            if (addressCache.has(key)) return addressCache.get(key);
+
+            try {
+                const token = sessionStorage.getItem(AUTH_TOKEN_KEY);
+                const r = await fetch(`/api/reverse-geocode?lat=${lat}&lng=${lng}`, {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                if (!r.ok) throw new Error("reverse-geocode request failed");
+                const data = await r.json();
+                addressCache.set(key, data.address || null);
+                return data.address || null;
+            } catch (e) {
+                console.error("Failed to fetch address:", e);
+                addressCache.set(key, null);
+                return null;
+            }
+        }
+
+        function openHistoryModal() {
+            if (!activeContact) return;
+            
+            document.getElementById("history-modal-phone").textContent = activeContact;
+            
+            // Extract locations
+            const targetKey = normalizePhone(activeContact);
+            const threadMsgs = allMessages
+                .filter(m => {
+                    const msgContact = contactIdentityFor(m);
+                    return normalizePhone(msgContact) === targetKey;
+                });
+                
+            // Chronological sort
+            const sortedThreadMsgs = [...threadMsgs].sort((a, b) => {
+                const timeA = new Date(a.time).getTime() || a.id;
+                const timeB = new Date(b.time).getTime() || b.id;
+                return timeA - timeB;
+            });
+            
+            const locs = [];
+            sortedThreadMsgs.forEach(m => {
+                const coords = extractCoordinates(m.text);
+                if (coords) {
+                    locs.push({
+                        coords: coords,
+                        time: m.time,
+                        text: m.text,
+                        id: m.id,
+                        direction: m.direction,
+                        operator: m.sim_operator || 'Unknown'
+                    });
+                }
+            });
+            
+            document.getElementById("history-modal-count").textContent = locs.length;
+            
+            // Show modal
+            const modal = document.getElementById("modal-location-history");
+            modal.classList.remove("hidden");
+            
+            // Populate list pane
+            const listContainer = document.getElementById("history-locations-list");
+            listContainer.innerHTML = "";
+            
+            if (locs.length === 0) {
+                listContainer.innerHTML = `
+                    <div class="p-4 text-center text-xs text-slate-500 font-medium">
+                        No locations available in this thread.
+                    </div>
+                `;
+                return;
+            }
+            
+            // Destroy existing map if any
+            if (historyMap) {
+                try {
+                    historyMap.remove();
+                } catch(e) {
+                    console.error("Error removing old map instance:", e);
+                }
+                historyMap = null;
+            }
+            
+            // Re-initialize map
+            if (typeof L !== "undefined") {
+                try {
+                    historyMap = L.map("history-map", {
+                        zoomControl: true,
+                        attributionControl: false
+                    });
+                    
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        maxZoom: 19
+                    }).addTo(historyMap);
+                } catch (e) {
+                    console.error("Leaflet initialization failed in modal:", e);
+                }
+            }
+            
+            const latlngs = [];
+            const markers = [];
+            
+            locs.forEach((loc, index) => {
+                const lat = loc.coords.lat;
+                const lng = loc.coords.lng;
+                const latlng = [lat, lng];
+                latlngs.push(latlng);
+                
+                const timeStr = formatBubbleTimestamp(loc.time);
+                const seqNumber = index + 1;
+                const addressElId = `hist-address-${index}-${seqNumber}`;
+                
+                // Add list item
+                const item = document.createElement("div");
+                item.className = "p-3 hover:bg-slate-50 border-b border-slate-100 transition cursor-pointer flex flex-col gap-1 text-xs";
+                item.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <span class="font-extrabold text-blue-700 bg-blue-50 border border-blue-100 rounded-full w-5 h-5 flex items-center justify-center shrink-0 text-[10px]">
+                            ${seqNumber}
+                        </span>
+                        <span class="text-[10px] text-slate-500 font-bold">${timeStr}</span>
+                    </div>
+                    <div id="${addressElId}" class="text-slate-700 font-semibold truncate">Locating address...</div>
+                    <div class="text-slate-500 mt-0.5 font-medium code-font text-[10px]">Lat: ${lat.toFixed(5)}, Lng: ${lng.toFixed(5)}</div>
+                    <div class="text-[10px] text-slate-400 font-semibold truncate">Operator: ${escapeHtml(loc.operator)}</div>
+                `;
+                
+                // Click list item to zoom/pan to that marker and open its popup
+                item.addEventListener("click", () => {
+                    if (historyMap) {
+                        historyMap.setView(latlng, 16);
+                        markers[index].openPopup();
+                    }
+                });
+                listContainer.appendChild(item);
+                
+                // Create custom marker icon with sequence number
+                if (historyMap) {
+                    const seqIcon = L.divIcon({
+                        className: 'custom-div-icon',
+                        html: `
+                            <div class="w-7 h-7 rounded-full bg-blue-700 text-white font-extrabold flex items-center justify-center border-2 border-white shadow-md text-xs relative active:scale-95 transition">
+                                ${seqNumber}
+                                <div class="absolute w-2 h-2 bg-blue-700 rotate-45 -bottom-1 left-2.5 border-r border-b border-white"></div>
+                            </div>
+                        `,
+                        iconSize: [28, 28],
+                        iconAnchor: [14, 28],
+                        popupAnchor: [0, -28]
+                    });
+                    
+                    const marker = L.marker(latlng, { icon: seqIcon }).addTo(historyMap);
+                    const popupAddressId = `popup-address-${index}-${seqNumber}`;
+
+                    const buildPopupContent = (addressLine) => `
+                        <div class="p-2 max-w-xs text-slate-800 leading-relaxed font-medium">
+                            <div class="flex items-center gap-1.5 border-b border-slate-100 pb-1.5 mb-1.5">
+                                <span class="bg-blue-700 text-white font-bold rounded-full w-5 h-5 flex items-center justify-center text-[10px]">
+                                    ${seqNumber}
+                                </span>
+                                <span class="font-bold text-slate-900 text-xs">Location Point</span>
+                            </div>
+                            <div class="text-[11px] space-y-1">
+                                <div id="${popupAddressId}" class="text-slate-700 font-bold pb-1 border-b border-slate-50">${addressLine}</div>
+                                <div class="flex justify-between gap-4">
+                                    <span class="text-slate-400 font-semibold">Time:</span>
+                                    <span class="font-extrabold text-slate-700">${timeStr}</span>
+                                </div>
+                                <div class="flex justify-between gap-4">
+                                    <span class="text-slate-400 font-semibold">Lat:</span>
+                                    <span class="font-mono text-slate-700 font-bold">${lat.toFixed(6)}</span>
+                                </div>
+                                <div class="flex justify-between gap-4">
+                                    <span class="text-slate-400 font-semibold">Lng:</span>
+                                    <span class="font-mono text-slate-700 font-bold">${lng.toFixed(6)}</span>
+                                </div>
+                                <div class="flex justify-between gap-4">
+                                    <span class="text-slate-400 font-semibold">Operator:</span>
+                                    <span class="font-bold text-slate-700 uppercase">${escapeHtml(loc.operator)}</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    marker.bindPopup(buildPopupContent("Locating address..."));
+                    markers.push(marker);
+
+                    // Resolve the real address in the background and fill it into
+                    // both the sidebar list item and the map popup once ready.
+                    fetchAddress(lat, lng).then(address => {
+                        const safeAddress = address ? escapeHtml(address) : "Address not found";
+                        const listEl = document.getElementById(addressElId);
+                        if (listEl) listEl.textContent = safeAddress;
+                        if (marker.getPopup()) {
+                            marker.setPopupContent(buildPopupContent(safeAddress));
+                        }
+                    });
+                } else {
+                    // Map failed to load, but the sidebar list should still show the
+                    // resolved address rather than being stuck on "Locating address...".
+                    fetchAddress(lat, lng).then(address => {
+                        const listEl = document.getElementById(addressElId);
+                        if (listEl) listEl.textContent = address ? escapeHtml(address) : "Address not found";
+                    });
+                }
+            });
+            
+            // Draw Polyline path between locations
+            if (historyMap && latlngs.length > 1) {
+                const polyline = L.polyline(latlngs, {
+                    color: '#1d4ed8', // tailwind blue-700
+                    weight: 3,
+                    opacity: 0.8,
+                    dashArray: '5, 8', // dashed path
+                    lineJoin: 'round'
+                }).addTo(historyMap);
+                
+                // Fit map bounds
+                setTimeout(() => {
+                    historyMap.fitBounds(polyline.getBounds(), { padding: [40, 40] });
+                }, 150);
+            } else if (historyMap && latlngs.length === 1) {
+                // Just one point
+                setTimeout(() => {
+                    historyMap.setView(latlngs[0], 14);
+                }, 150);
+            }
+            
+            // Trigger size invalidation
+            setTimeout(() => {
+                if (historyMap) historyMap.invalidateSize();
+            }, 300);
+        }
+
+        function closeHistoryModal() {
+            const modal = document.getElementById("modal-location-history");
+            modal.classList.add("hidden");
+            if (historyMap) {
+                try {
+                    historyMap.remove();
+                } catch(e) {
+                    console.error("Error cleaning up map on close:", e);
+                }
+                historyMap = null;
+            }
+        }
+
+        document.getElementById("btn-show-history-map").addEventListener("click", openHistoryModal);
+        document.getElementById("btn-close-location-modal").addEventListener("click", closeHistoryModal);
+        document.getElementById("modal-location-history").addEventListener("click", (e) => {
+            if (e.target === document.getElementById("modal-location-history")) {
+                closeHistoryModal();
+            }
+        });
+
+        // --- All Locations tab (combined map across every tracked number) -----
+        let locationsMap = null;
+        const LOCATION_COLORS = ["#1d4ed8", "#059669", "#d97706", "#dc2626", "#7c3aed", "#0891b2", "#db2777", "#65a30d"];
+
+        function colorForIdentity(identity, paletteMap) {
+            if (!paletteMap.has(identity)) {
+                paletteMap.set(identity, LOCATION_COLORS[paletteMap.size % LOCATION_COLORS.length]);
+            }
+            return paletteMap.get(identity);
+        }
+
+        // Every message across every conversation that has an extractable
+        // location, tagged with which tracked number (identity) it belongs to.
+        function collectAllLocations() {
+            const points = [];
+            allMessages.forEach(m => {
+                const coords = extractCoordinates(m.text);
+                if (!coords) return;
+                points.push({
+                    identity: contactIdentityFor(m) || "Unknown",
+                    coords,
+                    time: m.time,
+                    id: m.id,
+                    operator: m.sim_operator || "Unknown",
+                });
+            });
+            return points;
+        }
+
+        function populateLocationsFilter() {
+            const select = document.getElementById("locations-filter");
+            const previousValue = select.value;
+            const identities = Array.from(new Set(collectAllLocations().map(p => p.identity))).sort();
+
+            select.innerHTML = `<option value="">All Numbers</option>`;
+            identities.forEach(identity => {
+                const opt = document.createElement("option");
+                opt.value = identity;
+                opt.textContent = identity;
+                select.appendChild(opt);
+            });
+
+            if (identities.includes(previousValue)) select.value = previousValue;
+        }
+
+        function renderLocationsTab() {
+            const filterValue = document.getElementById("locations-filter").value;
+            let points = collectAllLocations();
+            if (filterValue) {
+                points = points.filter(p => normalizePhone(p.identity) === normalizePhone(filterValue));
+            }
+
+            // Chronological order within each identity's own track
+            points.sort((a, b) => {
+                const timeA = new Date(a.time).getTime() || a.id;
+                const timeB = new Date(b.time).getTime() || b.id;
+                return timeA - timeB;
+            });
+
+            document.getElementById("locations-count").textContent = points.length;
+
+            const listContainer = document.getElementById("locations-list");
+            listContainer.innerHTML = "";
+
+            if (locationsMap) {
+                try { locationsMap.remove(); } catch (e) { console.error("Error removing locations map:", e); }
+                locationsMap = null;
+            }
+
+            if (points.length === 0) {
+                listContainer.innerHTML = `<span class="text-xs text-slate-400 px-2">No locations found yet.</span>`;
+                return;
+            }
+
+            if (typeof L !== "undefined") {
+                try {
+                    locationsMap = L.map("locations-map", { zoomControl: true, attributionControl: false });
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(locationsMap);
+                } catch (e) {
+                    console.error("Leaflet initialization failed for locations tab:", e);
+                }
+            }
+
+            // Group points by identity so each tracked number gets its own
+            // color and its own connecting line, even though they all share
+            // one map.
+            const byIdentity = new Map();
+            points.forEach(p => {
+                if (!byIdentity.has(p.identity)) byIdentity.set(p.identity, []);
+                byIdentity.get(p.identity).push(p);
+            });
+
+            const paletteMap = new Map();
+            const allLatlngs = [];
+
+            byIdentity.forEach((groupPoints, identity) => {
+                const color = colorForIdentity(identity, paletteMap);
+                const latlngs = groupPoints.map(p => [p.coords.lat, p.coords.lng]);
+                allLatlngs.push(...latlngs);
+
+                if (locationsMap && latlngs.length > 1) {
+                    L.polyline(latlngs, { color, weight: 3, opacity: 0.75, dashArray: '5, 8', lineJoin: 'round' }).addTo(locationsMap);
+                }
+
+                groupPoints.forEach((p, idx) => {
+                    const latlng = [p.coords.lat, p.coords.lng];
+                    const timeStr = formatBubbleTimestamp(p.time);
+                    const addressElId = `allloc-address-${paletteMap.size}-${idx}-${p.id || Math.random().toString(36).slice(2)}`;
+
+                    let marker = null;
+                    let buildPopupContent = null;
+                    if (locationsMap) {
+                        const dotIcon = L.divIcon({
+                            className: 'custom-div-icon',
+                            html: `<div class="w-4 h-4 rounded-full border-2 border-white shadow-md" style="background-color:${color}"></div>`,
+                            iconSize: [16, 16],
+                            iconAnchor: [8, 8],
+                            popupAnchor: [0, -8]
+                        });
+                        marker = L.marker(latlng, { icon: dotIcon }).addTo(locationsMap);
+                        buildPopupContent = (addressLine) => `
+                            <div class="p-1 text-slate-800 leading-relaxed font-medium text-[11px] space-y-1">
+                                <div class="font-bold text-slate-900 code-font">${escapeHtml(identity)}</div>
+                                <div class="font-bold text-slate-700 pb-1 border-b border-slate-50">${addressLine}</div>
+                                <div>Time: <span class="font-bold">${timeStr}</span></div>
+                                <div class="font-mono">Lat: ${p.coords.lat.toFixed(5)}, Lng: ${p.coords.lng.toFixed(5)}</div>
+                                <div>Operator: <span class="font-bold">${escapeHtml(p.operator)}</span></div>
+                            </div>
+                        `;
+                        marker.bindPopup(buildPopupContent("Locating address..."));
+                    }
+
+                    const item = document.createElement("div");
+                    item.className = "p-3 hover:bg-slate-50 border-b border-slate-100 transition cursor-pointer flex flex-col gap-1 text-xs";
+                    item.innerHTML = `
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="font-bold code-font truncate" style="color:${color}">${escapeHtml(identity)}</span>
+                            <span class="text-[10px] text-slate-500 font-bold shrink-0">${timeStr}</span>
+                        </div>
+                        <div id="${addressElId}" class="text-slate-700 font-semibold truncate">Locating address...</div>
+                        <div class="text-slate-500 font-medium code-font text-[10px]">Lat: ${p.coords.lat.toFixed(5)}, Lng: ${p.coords.lng.toFixed(5)}</div>
+                    `;
+                    item.addEventListener("click", () => {
+                        if (locationsMap) {
+                            locationsMap.setView(latlng, 16);
+                            if (marker) marker.openPopup();
+                        }
+                    });
+                    listContainer.appendChild(item);
+
+                    // Resolve the real address in the background and fill it into
+                    // both the sidebar list item and the map popup once ready.
+                    fetchAddress(p.coords.lat, p.coords.lng).then(address => {
+                        const safeAddress = address ? escapeHtml(address) : "Address not found";
+                        const listEl = document.getElementById(addressElId);
+                        if (listEl) listEl.textContent = safeAddress;
+                        if (marker && marker.getPopup()) {
+                            marker.setPopupContent(buildPopupContent(safeAddress));
+                        }
+                    });
+                });
+            });
+
+            if (locationsMap && allLatlngs.length > 1) {
+                setTimeout(() => {
+                    locationsMap.fitBounds(L.latLngBounds(allLatlngs), { padding: [40, 40] });
+                }, 150);
+            } else if (locationsMap && allLatlngs.length === 1) {
+                setTimeout(() => locationsMap.setView(allLatlngs[0], 14), 150);
+            }
+            setTimeout(() => { if (locationsMap) locationsMap.invalidateSize(); }, 300);
+        }
+
+        document.getElementById("locations-filter").addEventListener("change", renderLocationsTab);
+        document.getElementById("btn-refresh-locations").addEventListener("click", () => {
+            populateLocationsFilter();
+            renderLocationsTab();
+        });
+
+        // Check login on startup
+        checkAuth();
+
+        // Register poll interval to keep the UI reactive every 7 seconds
+        setInterval(() => {
+            const token = sessionStorage.getItem(AUTH_TOKEN_KEY);
+            if (token) loadMessages();
+        }, 7000);
+    </script>
+</body>
+</html>

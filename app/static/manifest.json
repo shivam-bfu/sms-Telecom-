@@ -1,0 +1,17 @@
+{
+  "name": "SMS Integrator User Portal",
+  "short_name": "SMS Integrator",
+  "description": "Send bulk SMS via company Android integrator nodes",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0F172A",
+  "theme_color": "#4F46E5",
+  "icons": [
+    {
+      "src": "https://img.icons8.com/color/512/sms.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
