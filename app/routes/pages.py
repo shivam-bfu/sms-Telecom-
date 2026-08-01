@@ -1,6 +1,6 @@
-# from flask import Blueprint, render_template, send_from_directory, current_app, request
+from flask import Blueprint, render_template, send_from_directory, current_app, request
 
-# pages_bp = Blueprint("pages", __name__)
+pages_bp = Blueprint("pages", __name__)
 
 
 # @pages_bp.route("/", methods=["GET", "POST"])
